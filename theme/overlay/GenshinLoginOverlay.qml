@@ -8,6 +8,12 @@ Item {
     id: root
     property var controller: null
     property var adapter: null
+    // Real SDDM sets this itself (via __sddm_errors, see SddmAdapter.qml)
+    // when its own engine detects the configured theme failed to load —
+    // OverlayHost only assigns "adapter" a moment after this overlay is
+    // created, so Component.onCompleted is too early to read it; watch for
+    // the assignment instead.
+    onAdapterChanged: if (root.adapter && root.adapter.sddmErrors && root.adapter.sddmErrors.length > 0) root.reportWarning(root.adapter.sddmErrors)
     property var events: null
     property var sceneRuntime: null
     property string initialUsername: ""
@@ -23,7 +29,10 @@ Item {
     onPanelRevealedChanged: if (panelRevealed) root.hasEverRevealed = true
     Connections {
         target: root.events
-        function onEvent(name, payload) { if (name === "BeforeEnterLogin") root.hasEverRevealed = true }
+        function onEvent(name, payload) {
+            if (name === "BeforeEnterLogin") root.hasEverRevealed = true
+            if (name === "SceneLoadFailed") root.reportWarning(payload.reason)
+        }
     }
     property bool alternateAccount: initialUsername.length === 0
     // SDDM's UserModel can flag an account as not needing a password
@@ -82,7 +91,7 @@ Item {
         uiSound.play()
     }
     function sessionDisplayName(entry) {
-        if (entry === undefined || entry === null || entry === "") return qsTr("Ambiente padrão")
+        if (entry === undefined || entry === null || entry === "") return qsTr("Default session")
         return entry
     }
     // adapter.sessions is a plain JS array of strings in the preview app
@@ -235,7 +244,10 @@ Item {
     MediaPlayer {
         id: uiSound
         audioOutput: AudioOutput { volume: 0.72 }
-        onErrorOccurred: function(error, errorString) { console.warn("[GenshinTheme][audio] uiSound error:", error, errorString) }
+        onErrorOccurred: function(error, errorString) {
+            console.warn("[GenshinTheme][audio] uiSound error:", error, errorString)
+            root.reportWarning(qsTr("UI sound playback failed: %1").arg(errorString))
+        }
     }
     // Theme song: loops forever, toggled by the mute corner button, editable
     // via the "themeMusic" slot in Personalizar.
@@ -245,7 +257,10 @@ Item {
         loops: MediaPlayer.Infinite
         audioOutput: AudioOutput { volume: 0.5; muted: root.musicMuted }
         onSourceChanged: play()
-        onErrorOccurred: function(error, errorString) { console.warn("[GenshinTheme][audio] themeMusic error:", error, errorString) }
+        onErrorOccurred: function(error, errorString) {
+            console.warn("[GenshinTheme][audio] themeMusic error:", error, errorString)
+            root.reportWarning(qsTr("Theme music playback failed: %1").arg(errorString))
+        }
     }
     // Ambient scene sound (e.g. wind) — always audible regardless of the mute
     // button, which only controls the theme song above. No sound ships with
@@ -260,7 +275,10 @@ Item {
         loops: MediaPlayer.Infinite
         audioOutput: AudioOutput { volume: 0.4 }
         onSourceChanged: if (source.toString().length > 0) play()
-        onErrorOccurred: function(error, errorString) { console.warn("[GenshinTheme][audio] ambientSound error:", error, errorString) }
+        onErrorOccurred: function(error, errorString) {
+            console.warn("[GenshinTheme][audio] ambientSound error:", error, errorString)
+            root.reportWarning(qsTr("Ambient sound playback failed: %1").arg(errorString))
+        }
     }
     Timer {
         // On a real SDDM cold boot, the greeter's own isolated audio session
@@ -502,7 +520,7 @@ Item {
             Label {
                 id: capsLockWarning
                 Layout.fillWidth: true
-                text: qsTr("Caps Lock está ativado")
+                text: qsTr("Caps Lock is on")
                 color: "#bd8315"; font.family: genshinFont.name; font.pixelSize: 14; font.bold: true
                 horizontalAlignment: Text.AlignHCenter
                 visible: root.alternateAccount && root.adapter && root.adapter.keyboard && root.adapter.keyboard.capsLock === true
@@ -647,7 +665,7 @@ Item {
     GenshinSideButton {
         anchors { left: parent.left; bottom: parent.bottom; margins: 28 }
         imageSource: root.resolveAsset("powerButtonIcon", "ui-assets/title-original/UI_IconSmall_Quit.png")
-        caption: qsTr("Energia")
+        caption: qsTr("Power")
         onClicked: root.openMenu(shutdownConfirm)
         // Hidden during the door-opening animation for a login attempt;
         // comes back only if the attempt fails.
@@ -665,7 +683,7 @@ Item {
         Behavior on opacity { NumberAnimation { duration: 220 } }
         GenshinSideButton {
             imageSource: root.resolveAsset("accountButtonIcon", "ui-assets/title-original/UI_IconSmall_AddAccount.png")
-            caption: qsTr("Conta")
+            caption: qsTr("Account")
             onClicked: {
                 root.playSound("clickSound", "sounds/switch_task.mp3")
                 // First time (door animation hasn't played yet): behave like
@@ -679,13 +697,13 @@ Item {
         }
         GenshinSideButton {
             imageSource: root.resolveAsset("noticesButtonIcon", "ui-assets/title-original/UI_IconSmall_Notice.png")
-            caption: qsTr("Avisos")
+            caption: qsTr("Notices")
             onClicked: root.openMenu(noticesMenu)
         }
         GenshinSideButton {
             imageSource: root.musicMuted ? root.resolveAsset("muteButtonIconMuted", "ui-assets/icon-muted.svg")
                                           : root.resolveAsset("muteButtonIcon", "ui-assets/icon-volume.svg")
-            caption: root.musicMuted ? qsTr("Ativar música") : qsTr("Mutar música")
+            caption: root.musicMuted ? qsTr("Enable music") : qsTr("Mute music")
             onClicked: {
                 root.musicMuted = !root.musicMuted
                 root.playSound("clickSound", "sounds/switch_task.mp3")
@@ -701,7 +719,7 @@ Item {
             readonly property bool useHybridSleep: root.adapter && root.adapter.canHibernate === false && root.adapter.canHybridSleep === true
             visible: !root.adapter || root.adapter.canHibernate !== false || root.adapter.canHybridSleep === true
             imageSource: root.resolveAsset("sleepButtonIcon", "ui-assets/title-original/UI_IconSmall_Hibernate.png")
-            caption: qsTr("Hibernar")
+            caption: qsTr("Hibernate")
             onClicked: {
                 root.playSound("clickSound", "sounds/switch_task.mp3")
                 if (useHybridSleep) root.adapter.hybridSleep()
@@ -909,7 +927,7 @@ Item {
                 spacing: 24
                 GenshinDialogButton {
                     pillWidth: passwordInfo.width * 0.34
-                    text: qsTr("Cancelar"); iconGlyph: "×"; accentColor: "#4fd7ff"
+                    text: qsTr("Cancel"); iconGlyph: "×"; accentColor: "#4fd7ff"
                     onClicked: root.closeMenu(passwordInfo)
                 }
                 GenshinDialogButton {
@@ -921,30 +939,77 @@ Item {
         }
     }
 
+    // Same look as the "Forgot password?" info popup above, reused to
+    // surface anything that would otherwise only ever show up as a CLI/log
+    // warning (a failed scene load, a bad theme package, a sound that
+    // couldn't play) — since nothing on a real SDDM login screen is ever
+    // watching a terminal, these would otherwise be invisible.
+    GenshinPopup {
+        id: warningPopup
+        width: Math.min(680, root.width - 60)
+        height: width * (657 / 1024)
+        closePolicy: Popup.CloseOnEscape
+        property string warningMessage: ""
+        background: Image {
+            source: root.resolveAsset("modalBackground", "ui-assets/modalbackground.png")
+            fillMode: Image.Stretch
+        }
+        contentItem: Item {
+            anchors.fill: parent
+            Label {
+                anchors { top: parent.top; topMargin: warningPopup.height * 0.1; horizontalCenter: parent.horizontalCenter }
+                text: qsTr("Warning")
+                color: "#3e4657"; font.family: genshinFont.name; font.bold: true
+                font.pixelSize: Math.max(17, warningPopup.height * 0.058)
+            }
+            Label {
+                anchors { centerIn: parent; verticalCenterOffset: -warningPopup.height * 0.02 }
+                width: parent.width * 0.72
+                wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter
+                text: warningPopup.warningMessage
+                color: "#626978"; font.family: genshinFont.name; font.pixelSize: Math.max(14, warningPopup.height * 0.038)
+            }
+            GenshinDialogButton {
+                anchors { bottom: parent.bottom; bottomMargin: warningPopup.height * 0.1; horizontalCenter: parent.horizontalCenter }
+                pillWidth: warningPopup.width * 0.34
+                text: qsTr("OK"); iconGlyph: "!"; accentColor: "#f0c85a"
+                onClicked: root.closeMenu(warningPopup)
+            }
+        }
+    }
+    // Opens warningPopup with the given message — the single entry point
+    // every error source below (scene load failures, bad theme.json, sound
+    // playback errors) reports through.
+    function reportWarning(message) {
+        if (!message || !String(message).length) return
+        warningPopup.warningMessage = String(message)
+        root.openMenu(warningPopup)
+    }
+
     // Journal/notices panel — reproduces the reference screenshot's layout
     // (dark top tab bar, cream sidebar list, off-white article area) using
     // journalbackground.png as the empty frame, with our own content on top.
     readonly property var noticeEntries: [
         {
-            title: qsTr("Bem-vindo ao Genshin SDDM"),
-            body: qsTr("A cena, a porta e os efeitos são executados pelo projeto WebGL original. A autenticação é realizada localmente pelo SDDM e nenhuma credencial é enviada para a internet.")
+            title: qsTr("Welcome to Genshin SDDM"),
+            body: qsTr("The scene, the door, and the effects are all run by the original WebGL project. Authentication itself happens locally through SDDM, and no credentials are ever sent over the internet.")
         },
         {
-            title: qsTr("Sobre este tema"),
-            body: qsTr("Personalize esta cena pelo menu Personalizar: cores, imagens, sons e fontes podem ser trocados sem editar código, elemento por elemento, na seção ELEMENTOS DO TEMA.")
+            title: qsTr("About this theme"),
+            body: qsTr("This login screen is a Genshin Impact-inspired 3D scene built for SDDM, with real system user, session, and power support layered on top of the original WebGL scene.")
         }
     ]
     readonly property var updateEntries: [
         {
-            title: qsTr("Versão inicial"),
-            body: qsTr("A primeira versão deste tema trazia só a cena e a animação da porta — sem painel de login customizável, sem seletor de ambiente, sem este painel de avisos.")
+            title: qsTr("Initial version"),
+            body: qsTr("The first version of this theme only had the scene and the door animation — no customizable login panel, no session picker, no notices panel like this one.")
         },
         {
-            title: qsTr("Versão 1.1"),
-            body: qsTr("A 1.1 trouxe os elementos de interface: painel de login editável, seletor de ambiente, música tema e este painel de avisos com abas.")
+            title: qsTr("Version 1.1"),
+            body: qsTr("Version 1.1 added the interface elements: an editable login panel, a session picker, theme music, and this tabbed notices panel.")
         }
     ]
-    // 0 = Notícias, 1 = Outros temas, 2 = Atualizações
+    // 0 = Notices, 1 = Other themes, 2 = Updates
     property int selectedJournalTab: 0
     property int selectedNoticeIndex: 0
     onSelectedJournalTabChanged: root.selectedNoticeIndex = 0
@@ -1023,11 +1088,11 @@ Item {
                 anchors.centerIn: journalTopStrip
                 anchors.verticalCenterOffset: 10
                 spacing: 20
-                JournalTab { tabIndex: 0; label: qsTr("Notícias") }
+                JournalTab { tabIndex: 0; label: qsTr("Notices") }
                 Text { text: "|"; color: "#5a6072"; font.pixelSize: Math.max(14, noticesMenu.height * 0.03); topPadding: 2 }
-                JournalTab { tabIndex: 1; label: qsTr("Outros temas") }
+                JournalTab { tabIndex: 1; label: qsTr("Other themes") }
                 Text { text: "|"; color: "#5a6072"; font.pixelSize: Math.max(14, noticesMenu.height * 0.03); topPadding: 2 }
-                JournalTab { tabIndex: 2; label: qsTr("Atualizações") }
+                JournalTab { tabIndex: 2; label: qsTr("Updates") }
             }
             Button {
                 anchors {
@@ -1140,10 +1205,10 @@ Item {
         id: repairMenu; height: 300
         contentItem: ColumnLayout {
             spacing: 18
-            Label { Layout.fillWidth: true; Layout.topMargin: 28; text: qsTr("Verificar integridade dos arquivos"); color: "#3e4657"; font.family: genshinFont.name; font.pixelSize: 21; horizontalAlignment: Text.AlignHCenter }
+            Label { Layout.fillWidth: true; Layout.topMargin: 28; text: qsTr("Verify file integrity"); color: "#3e4657"; font.family: genshinFont.name; font.pixelSize: 21; horizontalAlignment: Text.AlignHCenter }
             Image { Layout.alignment: Qt.AlignHCenter; Layout.preferredWidth: 72; Layout.preferredHeight: 72; source: root.assetRoot + "ui-assets/UI_Img_Repair.png" }
-            Label { Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28; wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; text: qsTr("Os arquivos empacotados do tema foram encontrados e a cena WebGL foi carregada corretamente."); color: "#626978"; font.family: genshinFont.name }
-            Button { Layout.alignment: Qt.AlignHCenter; text: qsTr("Confirmar"); onClicked: root.closeMenu(repairMenu) }
+            Label { Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28; wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter; text: qsTr("The theme's packaged files were found, and the WebGL scene loaded correctly."); color: "#626978"; font.family: genshinFont.name }
+            Button { Layout.alignment: Qt.AlignHCenter; text: qsTr("Confirm"); onClicked: root.closeMenu(repairMenu) }
         }
     }
     // Environment/session picker modal — styled after the reference "select
@@ -1167,7 +1232,7 @@ Item {
             Text {
                 anchors { top: parent.top; left: parent.left; right: parent.right; topMargin: parent.height * 0.085 }
                 horizontalAlignment: Text.AlignHCenter
-                text: qsTr("Selecionar ambiente")
+                text: qsTr("Select session")
                 color: "#e4c98a"; font.family: genshinFont.name; font.pixelSize: Math.max(20, parent.height * 0.045); font.bold: true
             }
             Button {
@@ -1253,7 +1318,7 @@ Item {
             spacing: 26
             Label {
                 Layout.fillWidth: true; Layout.topMargin: 34; Layout.leftMargin: 30; Layout.rightMargin: 30
-                text: qsTr("Deseja desligar?")
+                text: qsTr("Shut down the computer?")
                 color: "#2b2f38"; font.family: genshinFont.name; font.bold: true; font.pixelSize: 26
                 wrapMode: Text.WordWrap
             }
@@ -1261,7 +1326,7 @@ Item {
                 Layout.fillWidth: true; Layout.leftMargin: 30; Layout.rightMargin: 30; Layout.bottomMargin: 30
                 spacing: 16
                 GenshinConfirmButton {
-                    Layout.fillWidth: true; text: qsTr("Cancelar"); filled: false
+                    Layout.fillWidth: true; text: qsTr("Cancel"); filled: false
                     onClicked: root.closeMenu(shutdownConfirm)
                 }
                 GenshinConfirmButton {

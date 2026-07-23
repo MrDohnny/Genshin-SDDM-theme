@@ -66,4 +66,8 @@ Nothing on screen reacts until you click. This is by design — it mirrors the g
 
 ## Credits
 
-The 3D door-opening scene is adapted from an existing Genshin Impact–themed WebGL demo. The SDDM integration layer — the login panel, real system user/session/power support, the notices board, sound bridging, and every interaction described above — was built specifically for this theme.
+The 3D door-opening scene is adapted from [gamemcu/www-genshin](https://github.com/gamemcu/www-genshin), a Three.js recreation of Genshin Impact's title screen, MIT licensed (Copyright (c) 2023 gamemcu). That project's own README states it as a non-commercial technical demonstration, not affiliated with or endorsed by miHoYo/HoYoverse, made for learning/research purposes.
+
+The SDDM integration layer — the login panel, real system user/session/power support, the notices board, sound bridging, and every interaction described above — was built specifically for this theme.
+
+Some UI textures and icons are sourced from Genshin Impact's own game files. This project is a fan-made, non-commercial derivative work; it is not affiliated with, endorsed by, or sponsored by miHoYo/HoYoverse, and all Genshin Impact assets, characters, and trademarks remain the property of their respective owners.

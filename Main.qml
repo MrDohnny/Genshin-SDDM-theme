@@ -85,6 +85,11 @@ Item {
         sessionModelSource: sessionModel
         userModelSource: userModel
         keyboardModel: keyboard
+        // SDDM's own greeter engine sets this (a plain string context
+        // property) when it detects the configured theme failed to load —
+        // the same mechanism its own built-in fallback theme uses to show
+        // "why". Guarded since older SDDM versions may not register it.
+        sddmErrorsSource: typeof __sddm_errors !== "undefined" ? __sddm_errors : ""
     }
     ThemeRuntime {
         anchors.fill: parent

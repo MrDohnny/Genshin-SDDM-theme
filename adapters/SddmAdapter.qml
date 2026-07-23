@@ -15,6 +15,13 @@ QtObject {
     required property var sessionModelSource
     required property var userModelSource
     required property var keyboardModel
+    // SDDM's own greeter engine sets this (a plain string context property,
+    // "__sddm_errors") when IT detects the configured theme failed to load
+    // — the same mechanism SDDM's own built-in fallback theme uses to show
+    // "why". Themes that load fine are never given a reason to expect it to
+    // be non-empty, but checking it costs nothing and catches real
+    // engine-level load problems a theme's own QML has no other way to see.
+    property string sddmErrorsSource: ""
     property var sessions: sessionModelSource
     // SDDM's own greeter object exposes these as real capability checks
     // (systemd-logind under the hood) — e.g. hibernate is unavailable on
@@ -33,6 +40,7 @@ QtObject {
     // one system user instead of asking for free-text entry.
     property var users: userModelSource
     property string lastUsername: userModelSource && userModelSource.lastUser !== undefined ? userModelSource.lastUser : ""
+    property string sddmErrors: sddmErrorsSource
     // KeyboardModel exposes plain, directly bindable Q_PROPERTYs (not a list
     // model), so themes can read/bind root.adapter.keyboard.capsLock etc.
     // straight away — no role/delegate access needed, unlike sessions/users.

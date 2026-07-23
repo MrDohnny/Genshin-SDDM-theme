@@ -20,7 +20,12 @@ Item {
     // a theme's scene fails outright.
     property bool sceneReady: false
     onSceneLoadSucceeded: root.sceneReady = true
-    onSceneLoadFailed: root.sceneReady = true
+    // Also routed through the eventBus (not just this raw signal) so a
+    // custom overlay can react to it generically — e.g. Genshin's overlay
+    // shows this as an on-screen warning, since nothing on a real SDDM
+    // login screen is ever watching the log this would otherwise only
+    // reach.
+    onSceneLoadFailed: function(reason) { root.sceneReady = true; events.emit("SceneLoadFailed", { reason: reason }) }
     required property var adapter
     property url themeRoot
     property url previewSceneUrl: ""
@@ -94,11 +99,25 @@ Item {
             root.manifest = value
             if (value.scene.format === "webgl") root.loadPackageWebMapping()
             else root.packageWebMapping = ({})
-            if (!root.previewSceneUrl && value.scene.format !== "webgl" && value.scene.format !== "none") sceneLoader.source = root.themeRoot + value.scene.file
+            // A previously-imported theme's 3D model must not linger once
+            // switching to a webgl (or empty) scene. It stays invisible
+            // either way (View3D's own "visible: !root.webScene" binding),
+            // but leaving it loaded wastes memory and — since View3D has no
+            // explicit z while WebSceneRuntime is z: 1 — sits at a lower
+            // layer than the new WebGL scene, so any edge case in that
+            // visibility binding shows the old scene right through the new
+            // one instead of nothing. Previously this reset only happened
+            // for format "none", not "webgl", leaving stale buttons/models
+            // from the last-imported theme visible behind the new one.
+            if (!root.previewSceneUrl) {
+                if (value.scene.format !== "webgl" && value.scene.format !== "none")
+                    sceneLoader.source = root.themeRoot + value.scene.file
+                else
+                    sceneLoader.source = ""
+            }
             if (value.scene.format === "webgl") webRuntime.source = root.themeRoot + value.scene.file + "?sddm=1"
             else webRuntime.source = ""
             if (value.scene.format === "none") {
-                sceneLoader.source = ""
                 root.sceneLoadSucceeded()
                 events.emit("SceneLoaded", { empty: true })
             }
@@ -108,7 +127,7 @@ Item {
             }
             events.emit("ThemeLoaded", { name: value.name, version: value.version })
         }
-        onFailed: function(message) { console.error("Invalid theme:", message) }
+        onFailed: function(message) { console.error("Invalid theme:", message); root.sceneLoadFailed("Invalid theme: " + message) }
     }
 
     EventBus { id: events }
