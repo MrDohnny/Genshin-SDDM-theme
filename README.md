@@ -4,24 +4,13 @@ A Genshin Impact–inspired 3D login screen for [SDDM](https://github.com/sddm/s
 
 Built with [SDDM 3D Platform](https://github.com/MrDohnny/3d-sddm-theme-maker), a modular editor and runtime for building animated 3D/WebGL SDDM login screens — it's the tool this theme was authored and packaged with, and it's what lets a theme like this run its own live WebGL scene, real system session/user/power integration, and animation timeline underneath a normal SDDM greeter.
 
-<!--
-  Add real screenshots here before publishing — none are included yet.
-  Suggested shots (see the "What each screenshot should show" section below
-  for exactly what to capture):
-    screenshots/01-click-to-begin.png
-    screenshots/02-door-opening.png
-    screenshots/03-login-panel-users.png
-    screenshots/04-power-menu.png
-    screenshots/05-session-picker.png
-    screenshots/06-notices-journal.png
-    screenshots/07-caps-lock-warning.png
--->
 ![Click to begin](screenshots/01-click-to-begin.png)
-![Door opening](screenshots/02-door-opening.png)
-![Login panel with real users](screenshots/03-login-panel-users.png)
-![Power menu](screenshots/04-power-menu.png)
-![Session picker](screenshots/05-session-picker.png)
-![Notices / journal panel](screenshots/06-notices-journal.png)
+![Walking up to the door](screenshots/clickdoor.png)
+![Login panel with real users](screenshots/login.png)
+![Session picker](screenshots/ambient.png)
+![Notices / journal panel](screenshots/journal.png)
+
+<!-- Still missing: a shot of the power menu (shutdown/restart/suspend/hibernate). -->
 
 ## How it works
 
