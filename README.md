@@ -1,6 +1,8 @@
 # Genshin Login WebGL — SDDM Theme
 
-A Genshin Impact–inspired 3D login screen for [SDDM](https://github.com/sddm/sddm), built with Qt Quick and an embedded WebGL scene (Three.js). The whole screen is click-driven: nothing appears until you interact with it, and every corner button opens its own animated panel.
+A Genshin Impact–inspired 3D login screen for [SDDM](https://github.com/sddm/sddm). Instead of a static login form, you land on a fully 3D scene rendered live in WebGL: click anywhere and the camera walks toward an ornate floating door, which swings open with its own sound effect before the login card fades in over the scene — the same "click to begin" rhythm as the game's own title screen, not a video loop or a static background image.
+
+Built with [SDDM 3D Platform](https://github.com/MrDohnny/3d-sddm-theme-maker), a modular editor and runtime for building animated 3D/WebGL SDDM login screens — it's the tool this theme was authored and packaged with, and it's what lets a theme like this run its own live WebGL scene, real system session/user/power integration, and animation timeline underneath a normal SDDM greeter.
 
 <!--
   Add real screenshots here before publishing — none are included yet.
@@ -52,11 +54,17 @@ Nothing on screen reacts until you click. This is by design — it mirrors the g
    [Theme]
    Current=genshin-login-webgl
    ```
-3. **Important**: this theme's WebGL scene needs a couple of Chromium flags set for the greeter process specifically, or the 3D scene may fail to load under SDDM's restricted system user (a well-known QtWebEngine + sandboxed-user limitation, unrelated to this theme). Add this to the same `sddm.conf.d` file (or your existing `[General]` section):
+3. **Required, manual step — this can't be automated by any installer, including the KDE Store's own:** this theme's WebGL scene needs a couple of environment variables set for the greeter process specifically. These have to exist *before* the greeter process starts, which is controlled entirely by SDDM itself — no theme package, GHNS installer, or `metadata.desktop` setting can set them from the inside. Add this to `/etc/sddm.conf.d/` (a new file, or your existing `[General]` section):
    ```ini
    [General]
-   GreeterEnvironment=QML_XHR_ALLOW_FILE_READ=1,QTWEBENGINE_CHROMIUM_FLAGS=--allow-file-access-from-files --disable-web-security --autoplay-policy=no-user-gesture-required --force-color-profile=srgb --no-sandbox --disable-gpu-sandbox
+   GreeterEnvironment=QML_XHR_ALLOW_FILE_READ=1,QTWEBENGINE_CHROMIUM_FLAGS=--allow-file-access-from-files --disable-web-security --autoplay-policy=no-user-gesture-required --force-color-profile=srgb
    ```
+   - `QML_XHR_ALLOW_FILE_READ=1` lets the theme's QML read its own local `theme.json`/assets.
+   - `--allow-file-access-from-files` / `--disable-web-security` let the WebGL page load its own local images/audio (it's served from a `file://` URL, which Chromium otherwise sandboxes from itself).
+   - `--autoplay-policy=no-user-gesture-required` lets the door sound / background music autoplay without a prior click *inside the WebEngine page itself* (our own click on the SDDM side doesn't count as one from Chromium's perspective).
+   - `--force-color-profile=srgb` is just for consistent colors.
+
+   You may also see `--no-sandbox --disable-gpu-sandbox` recommended elsewhere for this exact scenario (SDDM's `sddm` user is normally too restricted for Chromium's own sandbox). On Ubuntu/Debian-based systems specifically, this is very likely unnecessary — they ship `/etc/apparmor.d/QtWebEngineProcess`, an AppArmor profile that already grants the WebEngine process the `userns` permission it needs regardless of which user runs it (verified on a real SDDM greeter, both with and without these two flags). If you're on a distro without an equivalent AppArmor allowance, add them back to the line above.
 4. Restart SDDM (or reboot) to see it.
 
 ## Known limitations
