@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="./logo.ico" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0,maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="An online genshin loading demo, created by TEAM.x.y.z. team." />
+  <title>原神启动</title>
+  <script src="./assets/sddm-local-assets.js"></script>
+  <script>
+    // Chromium auto-suspends a page's WebAudio context after it sits silent
+    // for a while to save power. This page never gets reloaded across an
+    // entire SDDM session (the greeter process — and this loaded page along
+    // with it — stays alive from boot through however many logins/logouts
+    // happen before a reboot), so by the time a user logs back out the
+    // scene's own AudioContext (created lazily by Three.js the first time it
+    // plays a sound) has almost certainly been auto-suspended, and nothing
+    // in the upstream scene code ever resumes it again — sound effects like
+    // the door opening silently do nothing from then on, even though the
+    // Qt-side music/click sounds are unaffected (those never touch this
+    // page's audio permissions at all). Wrap the constructor so every
+    // AudioContext the scene creates is tracked, and expose a resume-all
+    // helper the Qt host calls before every scene command (see
+    // core/WebSceneRuntime.qml's play()) and on tab visibility regain.
+    (function() {
+      var NativeAudioContext = window.AudioContext || window.webkitAudioContext;
+      if (NativeAudioContext) {
+        var contexts = [];
+        var WrappedAudioContext = function() {
+          var context = new NativeAudioContext();
+          contexts.push(context);
+          return context;
+        };
+        WrappedAudioContext.prototype = NativeAudioContext.prototype;
+        window.AudioContext = WrappedAudioContext;
+        window.webkitAudioContext = WrappedAudioContext;
+        window.__sddmResumeAudioContexts = function() {
+          contexts.forEach(function(context) {
+            if (context.state === "suspended") context.resume();
+          });
+        };
+        document.addEventListener("visibilitychange", function() {
+          if (!document.hidden) window.__sddmResumeAudioContexts();
+        });
+      }
+    })();
+
+    // The scene can finish preloading before Qt's LoadSucceeded notification.
+    // Keep a small event backlog so the host can replay SceneReady afterwards.
+    window.__sddmSceneEventBacklog = [];
+    window.addEventListener("genshin-sddm-event", function(event) {
+      const name = event && event.detail && (event.detail.name || event.detail);
+      if (name && !window.__sddmSceneEventBacklog.includes(String(name)))
+        window.__sddmSceneEventBacklog.push(String(name));
+    });
+
+    // Chromium does not support fetch(file://). On a cold boot this used to
+    // strand the Three.js preloader forever. Serve fetched resources from the
+    // generated in-page map; regular img/audio URLs can remain local files.
+    //
+    // The DRACOLoader used to decode the compressed .glb meshes also defaults
+    // to fetching its decoder (draco_decoder.wasm etc.) from Google's CDN
+    // (www.gstatic.com) unless told otherwise — this is why the 3D scene
+    // never rendered on a real cold boot (no network yet at that point in
+    // startup) while the flat QML UI still appeared fine: only the models
+    // needed a decoder that could never actually download. Redirect that
+    // request to the embedded local copy too, same as everything else here.
+    if (window.fetch) {
+      const nativeFetch = window.fetch.bind(window);
+      window.fetch = function(input, init) {
+        const requestUrl = typeof input === "string" ? input : input.url;
+        const resolvedUrl = new URL(requestUrl, location.href);
+        let key = "";
+        if (resolvedUrl.protocol === "file:") {
+          const marker = "/Genshin/";
+          const decodedPath = decodeURIComponent(resolvedUrl.pathname);
+          const markerAt = decodedPath.lastIndexOf(marker);
+          key = markerAt >= 0 ? decodedPath.slice(markerAt + 1) : "";
+        } else if (resolvedUrl.hostname === "www.gstatic.com" && resolvedUrl.pathname.indexOf("/draco/") >= 0) {
+          key = "draco/" + resolvedUrl.pathname.slice(resolvedUrl.pathname.lastIndexOf("/") + 1);
+        } else {
+          return nativeFetch(input, init);
+        }
+        const asset = window.__sddmLocalAssets && window.__sddmLocalAssets[key];
+        if (!asset)
+          return Promise.reject(new TypeError("Local asset is not embedded: " + key));
+        const binary = atob(asset[1]);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; ++index)
+          bytes[index] = binary.charCodeAt(index);
+        return Promise.resolve(new Response(bytes, {
+          status: 200,
+          headers: { "Content-Type": asset[0] }
+        }));
+      };
+    }
+  </script>
+  <script type="module" crossorigin src="./assets/index-45d0751e.js"></script>
+  <link rel="stylesheet" href="./assets/index-3c0e94d9.css">
+</head>
+<body>
+  <div id="root"></div>
+  
+</body>
+</html>

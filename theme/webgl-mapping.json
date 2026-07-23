@@ -1,0 +1,20 @@
+{
+  "bridgeObject": "sddmGenshin",
+  "commandMethod": "play",
+  "muteMethod": "setMusicMuted",
+  "eventDomName": "genshin-sddm-event",
+  "panelRevealDelayMs": 280,
+  "sceneReadyFallbackMs": 6000,
+  "actions": {
+    "Idle": "Idle",
+    "EnterLogin": "EnterLogin",
+    "Idle2ActivePanel": "Idle2ActivePanel",
+    "LoginFailed": "LoginFailed",
+    "AuthenticationProcessing": "AuthenticationProcessing"
+  },
+  "events": {
+    "SceneReady": "SceneReady",
+    "DoorReady": "PanelReveal",
+    "DoorClosed": "PanelReveal"
+  }
+}

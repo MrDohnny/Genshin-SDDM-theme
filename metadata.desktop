@@ -1,0 +1,12 @@
+[SddmGreeterTheme]
+Name=Genshin Login WebGL
+Description=Animated 3D Genshin Impact-style login screen with a door-opening entrance sequence
+Author=www-genshin contributors / SDDM integration
+License=MIT
+Type=sddm-theme
+Version=0.1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=genshin-login-webgl
+Theme-API=2.0
+QtVersion=6
