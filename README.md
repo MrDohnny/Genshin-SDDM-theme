@@ -40,8 +40,14 @@ Nothing on screen reacts until you click. This is by design — it mirrors the g
 
 ## Requirements
 
-- SDDM built with QtWebEngine support
-- Qt >= 6.5 (Qt Quick, Qt Quick Controls, Qt Multimedia, Qt WebEngine)
+- SDDM >= 0.21 (Theme-API 2.0 — declared in `metadata.desktop`; tested against 0.21.0)
+- Qt >= 6.5, with these QML modules installed — none of them are pulled in by a typical SDDM/Plasma install by default, since most themes don't need any of them:
+  - **Qt Quick 3D** (with its AssetUtils and Helpers submodules) — on Debian/Ubuntu: `qml6-module-qtquick3d qml6-module-qtquick3d-assetutils qml6-module-qtquick3d-helpers`
+  - **Qt WebEngine** — on Debian/Ubuntu: `qml6-module-qtwebengine libqt6webenginequick6`
+  - **Qt Multimedia** (with a working backend — FFmpeg or GStreamer) — on Debian/Ubuntu: `qml6-module-qtmultimedia`
+  - On Arch, Fedora, openSUSE etc. the equivalent packages are usually named `qt6-quick3d`, `qt6-webengine`, `qt6-multimedia` (or similar) — check your distro's package search if the theme fails to load at all (a QML import error, not a blank/broken scene) rather than a rendering problem.
+- A working audio session for the `sddm` system user specifically (not just your own login) — this needs `pam_systemd` wired into whichever PAM service SDDM's greeter uses (this is the default on any systemd-based distro, but worth knowing if you're troubleshooting silence — see "Known limitations" below).
+- No particular display server requirement — nothing in this theme's own code depends on Wayland specifically, X11-based SDDM setups should work the same way, though this has mainly been tested under a Wayland (KWin) greeter session.
 
 ## Installation
 
