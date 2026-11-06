@@ -30,8 +30,13 @@ Item {
     Connections {
         target: root.events
         function onEvent(name, payload) {
+            // SceneLoadFailed/ScenePanelFailsafe are handled generically by
+            // OverlayHost.qml now (it forces the plain default panel + a
+            // theme-agnostic troubleshooting popup regardless of whether
+            // this custom overlay mounted) — this overlay's own warningPopup
+            // is hidden along with everything else here once that fallback
+            // kicks in, so there's no point opening it too.
             if (name === "BeforeEnterLogin") root.hasEverRevealed = true
-            if (name === "SceneLoadFailed") root.reportWarning(payload.reason)
         }
     }
     property bool alternateAccount: initialUsername.length === 0
@@ -985,6 +990,12 @@ Item {
         warningPopup.warningMessage = String(message)
         root.openMenu(warningPopup)
     }
+
+    // Scene-load-failure diagnostics (missing modules, missing greeter
+    // flags) are handled generically by OverlayHost.qml, not here — see the
+    // Connections block above. It forces the plain default panel to take
+    // over in that case, so a popup defined on this overlay wouldn't be
+    // reachable anyway.
 
     // Journal/notices panel — reproduces the reference screenshot's layout
     // (dark top tab bar, cream sidebar list, off-white article area) using

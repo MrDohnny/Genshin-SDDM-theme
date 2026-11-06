@@ -277,6 +277,27 @@ Item {
         repeat: false
         onTriggered: overlay.reveal()
     }
+    // For a webgl theme, the login panel only ever reveals through the
+    // scene's own "DoorReady"/"DoorClosed" JS event (mapped to "PanelReveal"
+    // above) — there is no other path to overlay.reveal() at all (see
+    // revealAfterEnterLogin/externalRevealControl gating throughout this
+    // file). If the page's own JS never runs (missing Qt WebEngine flags,
+    // a broken bundle, etc.) that event never arrives and the user is stuck
+    // on a blank scene with no way to type a password. Once the user has
+    // actually tried to log in (BeforeEnterLogin), force the panel open
+    // anyway if the scene hasn't confirmed it within a generous window, and
+    // tell the custom overlay so it can explain what's likely wrong.
+    Timer {
+        id: panelRevealFailsafe
+        interval: 6000
+        repeat: false
+        onTriggered: {
+            if (overlay.revealed) return
+            console.warn("WebGL scene: panel never confirmed ready, revealing login panel anyway")
+            overlay.reveal()
+            events.emit("ScenePanelFailsafe", {})
+        }
+    }
     SceneAnimationController {
         id: animations
         runtimeLoader: sceneLoader
@@ -297,6 +318,7 @@ Item {
             if (name === "LoginFailure" && root.webScene) {
                 overlay.conceal()
             }
+            if (name === "BeforeEnterLogin" && root.webScene) panelRevealFailsafe.restart()
         }
     }
     SceneApi {

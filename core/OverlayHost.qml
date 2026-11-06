@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
+import QtQuick.Layouts
 import "../ui"
 
 Item {
@@ -13,6 +14,13 @@ Item {
     property bool revealAfterEnterLogin: false
     property bool externalRevealControl: false
     property string customOverlayComponent: ""
+    // Set once a scene-load failure is reported (see the eventBus
+    // Connections below) — overrides customOverlayComponent so the plain,
+    // reliable default login panel and power menu take over even when a
+    // custom overlay is/was active, instead of leaving whatever that
+    // overlay's own (possibly also broken, since it may share the same
+    // failed assets) login card was showing.
+    property bool forceGenericFallback: false
     property url themeRoot: ""
     property var sceneRuntime: null
     property bool sizeEditable: true
@@ -85,8 +93,8 @@ Item {
         controller: loginController
         events: eventBus
         sessions: adapter.sessions
-        visible: parent.customOverlayComponent.length === 0 && (parent.revealed || opacity > 0)
-        opacity: parent.customOverlayComponent.length === 0 && parent.revealed ? 1 : 0
+        visible: (parent.customOverlayComponent.length === 0 || parent.forceGenericFallback) && (parent.revealed || opacity > 0)
+        opacity: (parent.customOverlayComponent.length === 0 || parent.forceGenericFallback) && parent.revealed ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 300 } }
         initialUsername: parent.initialUsername
         usernameLocked: parent.usernameLocked
@@ -105,7 +113,7 @@ Item {
         id: customLoginPanel
         anchors.fill: parent
         source: overlayHost.customOverlayComponent.length ? overlayHost.themeRoot + overlayHost.customOverlayComponent : ""
-        visible: status === Loader.Ready
+        visible: status === Loader.Ready && !overlayHost.forceGenericFallback
         onLoaded: {
             item.controller = overlayHost.loginController
             item.events = overlayHost.eventBus
@@ -224,7 +232,7 @@ Item {
     }
     PowerMenu {
         id: powerMenu
-        visible: parent.customOverlayComponent.length === 0
+        visible: parent.customOverlayComponent.length === 0 || parent.forceGenericFallback
         x: parent.width * ((parent.editableSettings ? parent.editableSettings.powerXPercent : 90) / 100) - width / 2
         y: parent.height * ((parent.editableSettings ? parent.editableSettings.powerYPercent : 92) / 100) - height / 2
         adapter: parent.adapter
@@ -245,7 +253,112 @@ Item {
         function onEvent(name, payload) {
             if (name === "BeforeEnterLogin" && !overlayHost.revealAfterEnterLogin) overlayHost.reveal()
             if (name === "AfterEnterLogin" && overlayHost.revealAfterEnterLogin && !overlayHost.externalRevealControl) overlayHost.reveal()
+            // Any scene-load failure — theme.json itself unreadable (e.g.
+            // missing QML_XHR_ALLOW_FILE_READ), a converted-scene error, or
+            // the webgl scene never confirming it's ready to reveal its own
+            // panel — falls back to the plain default panel and power menu
+            // unconditionally, even if a custom overlay (e.g. Genshin's) did
+            // mount. Its own login card may depend on the very same assets
+            // that just failed, so it isn't necessarily any more trustworthy
+            // than showing nothing; the generic panel below only depends on
+            // the real system's own user/session/power adapter, not on
+            // anything theme-specific that could also be broken.
+            if (name === "SceneLoadFailed" || name === "ScenePanelFailsafe") {
+                diagnosticsPopup.reasonText = (name === "SceneLoadFailed" && payload && payload.reason) ? String(payload.reason) : ""
+                overlayHost.forceGenericFallback = true
+                // Nothing about the plain fallback panel prompts the user to
+                // click first (that "click to begin" affordance only exists
+                // inside a custom overlay, which is now hidden) — reveal it
+                // immediately instead of waiting on the usual
+                // click-then-animation-finishes chain.
+                overlayHost.reveal()
+                diagnosticsPopup.open()
+            }
         }
     }
     onShowInstantlyChanged: revealed = showInstantly
+
+    // Theme-agnostic troubleshooting popup — see the Connections block above
+    // for exactly when this is shown instead of a custom overlay's own.
+    Popup {
+        id: diagnosticsPopup
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(720, overlayHost.width - 60)
+        modal: true; focus: true; padding: 0
+        closePolicy: Popup.NoAutoClose
+        z: 1000
+        property string reasonText: ""
+        background: Rectangle { color: "#1c2029"; border.color: "#3a4152"; border.width: 1; radius: 8 }
+        Overlay.modal: Rectangle { color: "#66000000" }
+        contentItem: ColumnLayout {
+            width: diagnosticsPopup.width
+            spacing: 14
+            Label {
+                Layout.fillWidth: true; Layout.topMargin: 24; Layout.leftMargin: 28; Layout.rightMargin: 28
+                horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                text: qsTr("3D scene didn't load")
+                color: "#f2f3f5"; font.bold: true; font.pixelSize: 20
+            }
+            Label {
+                Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28
+                wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter
+                text: qsTr("You can still log in below. This is usually caused by one of two things on the machine running this greeter:")
+                color: "#c2c6cf"; font.pixelSize: 13
+            }
+            Label {
+                Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28
+                visible: text.length > 0
+                wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter
+                text: diagnosticsPopup.reasonText
+                color: "#e0a04a"; font.pixelSize: 12; font.italic: true
+            }
+            Label {
+                Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28; Layout.topMargin: 2
+                wrapMode: Text.WordWrap
+                text: qsTr("1. Missing Qt6 modules — install them (Debian/Ubuntu):")
+                color: "#f2f3f5"; font.bold: true; font.pixelSize: 13
+            }
+            Rectangle {
+                Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28
+                Layout.preferredHeight: aptCommandText.implicitHeight + 20
+                color: "#12151a"; radius: 6
+                Text {
+                    id: aptCommandText
+                    anchors { fill: parent; margins: 10 }
+                    text: "sudo apt install qml6-module-qtquick3d qml6-module-qtquick3d-assetutils qml6-module-qtquick3d-helpers qml6-module-qtwebengine libqt6webenginequick6 qml6-module-qtmultimedia"
+                    color: "#9fe6a0"; font.family: "monospace"; font.pixelSize: 11
+                    wrapMode: Text.WrapAnywhere
+                }
+            }
+            Label {
+                Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28; Layout.topMargin: 2
+                wrapMode: Text.WordWrap
+                text: qsTr("2. Missing greeter environment flags — create a file under /etc/sddm.conf.d/ with:")
+                color: "#f2f3f5"; font.bold: true; font.pixelSize: 13
+            }
+            Rectangle {
+                Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28
+                Layout.preferredHeight: envCommandText.implicitHeight + 20
+                color: "#12151a"; radius: 6
+                Text {
+                    id: envCommandText
+                    anchors { fill: parent; margins: 10 }
+                    text: "[General]\nGreeterEnvironment=QML_XHR_ALLOW_FILE_READ=1,QTWEBENGINE_CHROMIUM_FLAGS=--allow-file-access-from-files --disable-web-security --autoplay-policy=no-user-gesture-required --force-color-profile=srgb"
+                    color: "#9fe6a0"; font.family: "monospace"; font.pixelSize: 11
+                    wrapMode: Text.WrapAnywhere
+                }
+            }
+            Label {
+                Layout.fillWidth: true; Layout.leftMargin: 28; Layout.rightMargin: 28
+                wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter
+                text: qsTr("Then restart SDDM (or reboot).")
+                color: "#c2c6cf"; font.pixelSize: 13
+            }
+            Button {
+                Layout.alignment: Qt.AlignHCenter; Layout.bottomMargin: 24; Layout.topMargin: 4
+                text: qsTr("OK")
+                onClicked: diagnosticsPopup.close()
+            }
+        }
+    }
 }
